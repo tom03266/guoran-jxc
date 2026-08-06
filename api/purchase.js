@@ -1,8 +1,13 @@
 const { appendRow } = require('../lib/sheets');
+const { checkPassword } = require('../lib/auth');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+  if (!checkPassword(req)) {
+    res.status(401).json({ error: '密碼錯誤或未登入' });
     return;
   }
   try {

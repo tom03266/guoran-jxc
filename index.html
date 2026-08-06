@@ -152,10 +152,61 @@
   }
   .history-item .label { color: var(--muted); font-size: 12px; }
   .hidden { display: none; }
+  #gate {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  #gate .box {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    text-align: center;
+  }
+  #gate h2 { margin: 0 0 16px; font-size: 18px; color: var(--text); }
+  #gate input {
+    width: 100%;
+    padding: 14px;
+    font-size: 20px;
+    letter-spacing: 2px;
+    text-align: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+  #gate button {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+    background: var(--green);
+    color: white;
+  }
+  #gate .gate-msg { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; }
 </style>
 </head>
 <body>
 
+<div id="gate">
+  <div class="box">
+    <h2>請輸入密碼</h2>
+    <input type="password" id="gate_pw" inputmode="numeric" placeholder="密碼" />
+    <button onclick="checkGate()">進入</button>
+    <div class="gate-msg" id="gate_msg"></div>
+  </div>
+</div>
+
+<div id="app" class="hidden">
 <header>進銷存登打</header>
 
 <div class="tabs">
@@ -249,8 +300,56 @@
     <div id="historyList"></div>
   </div>
 </main>
+</div>
 
 <script>
+const PW_KEY = 'jxc_pw';
+
+function showApp() {
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+}
+
+async function checkGate() {
+  const pw = document.getElementById('gate_pw').value;
+  const msg = document.getElementById('gate_msg');
+  msg.textContent = '確認中...';
+  try {
+    const res = await fetch('/api/check-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    });
+    if (res.ok) {
+      localStorage.setItem(PW_KEY, pw);
+      msg.textContent = '';
+      showApp();
+    } else {
+      msg.textContent = '密碼錯誤';
+    }
+  } catch (e) {
+    msg.textContent = '連線失敗，請重試';
+  }
+}
+document.getElementById('gate_pw').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') checkGate();
+});
+
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'X-Site-Password': localStorage.getItem(PW_KEY) || '',
+  };
+}
+
+(function initGate() {
+  const saved = localStorage.getItem(PW_KEY);
+  if (saved) {
+    document.getElementById('gate_pw').value = saved;
+    checkGate();
+  }
+})();
+
 function todayStr() {
   const d = new Date();
   const tz = d.getTimezoneOffset() * 60000;
@@ -311,9 +410,14 @@ async function submitPurchase() {
   try {
     const res = await fetch('/api/purchase', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify(data),
     });
+    if (res.status === 401) {
+      localStorage.removeItem(PW_KEY);
+      location.reload();
+      return;
+    }
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || '送出失敗');
     msg.textContent = '已送出，總金額 ' + result.total;
@@ -355,9 +459,14 @@ async function submitSale() {
   try {
     const res = await fetch('/api/sale', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify(data),
     });
+    if (res.status === 401) {
+      localStorage.removeItem(PW_KEY);
+      location.reload();
+      return;
+    }
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || '送出失敗');
     msg.textContent = '已送出，總金額 ' + result.total;
