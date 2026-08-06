@@ -153,14 +153,13 @@
   .history-item .label { color: var(--muted); font-size: 12px; }
   .hidden { display: none; }
   #gate {
-    position: fixed;
-    inset: 0;
+    min-height: 100vh;
     background: var(--bg);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    z-index: 100;
     padding: 20px;
+    padding-top: 15vh;
   }
   #gate .box {
     background: var(--card);
@@ -200,8 +199,10 @@
 <div id="gate">
   <div class="box">
     <h2>請輸入密碼</h2>
-    <input type="text" id="gate_pw" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="密碼" />
-    <button onclick="checkGate()">進入</button>
+    <form id="gate_form">
+      <input type="text" id="gate_pw" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="密碼" />
+      <button type="submit">進入</button>
+    </form>
     <div class="gate-msg" id="gate_msg"></div>
   </div>
 </div>
@@ -331,8 +332,9 @@ async function checkGate() {
     msg.textContent = '連線失敗，請重試';
   }
 }
-document.getElementById('gate_pw').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') checkGate();
+document.getElementById('gate_form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  checkGate();
 });
 
 function authHeaders() {
