@@ -1,0 +1,6 @@
+{
+  "name": "guoran-jxc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "進銷存登打網頁（進貨/銷貨即時輸入到 Google 試算表）"
+}

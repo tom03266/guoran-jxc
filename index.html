@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>進銷存登打</title>
+<style>
+  :root {
+    --green: #2e7d32;
+    --green-dark: #1b5e20;
+    --bg: #f4f6f4;
+    --card: #ffffff;
+    --border: #dfe3df;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --danger: #c0392b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding-bottom: 40px;
+  }
+  header {
+    background: var(--green);
+    color: white;
+    padding: 16px;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 14px 0;
+    font-size: 17px;
+    font-weight: 700;
+    border-radius: 10px;
+    border: 2px solid var(--green);
+    background: white;
+    color: var(--green);
+  }
+  .tab-btn.active {
+    background: var(--green);
+    color: white;
+  }
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 12px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin-bottom: 16px;
+  }
+  .field { margin-bottom: 14px; }
+  label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input[type=text], input[type=number], input[type=date] {
+    width: 100%;
+    padding: 12px;
+    font-size: 17px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+  }
+  .row2 { display: flex; gap: 10px; }
+  .row2 .field { flex: 1; }
+  .pay-options { display: flex; gap: 8px; }
+  .pay-btn {
+    flex: 1;
+    padding: 12px 0;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    background: white;
+    color: var(--text);
+  }
+  .pay-btn.selected {
+    border-color: var(--green);
+    background: #e8f5e9;
+    color: var(--green-dark);
+  }
+  .total-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: #f0f4f0;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+  .total-box span.amount { font-size: 22px; color: var(--green-dark); }
+  .submit-btn {
+    width: 100%;
+    padding: 16px;
+    font-size: 18px;
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    background: var(--green);
+    color: white;
+  }
+  .submit-btn:disabled { opacity: 0.6; }
+  .msg {
+    text-align: center;
+    font-size: 14px;
+    margin-top: 10px;
+    min-height: 20px;
+  }
+  .msg.ok { color: var(--green-dark); }
+  .msg.err { color: var(--danger); }
+  .history {
+    padding: 0 4px;
+  }
+  .history h3 {
+    font-size: 15px;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .history-item {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .history-item .label { color: var(--muted); font-size: 12px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header>進銷存登打</header>
+
+<div class="tabs">
+  <button class="tab-btn active" id="tabPurchase" onclick="switchTab('purchase')">進貨登打</button>
+  <button class="tab-btn" id="tabSale" onclick="switchTab('sale')">銷貨登打</button>
+</div>
+
+<main>
+  <!-- 進貨表單 -->
+  <div class="card" id="formPurchase">
+    <div class="field">
+      <label>日期</label>
+      <input type="date" id="p_date" />
+    </div>
+    <div class="field">
+      <label>供應商</label>
+      <input type="text" id="p_supplier" placeholder="例如：名昇" />
+    </div>
+    <div class="field">
+      <label>品名</label>
+      <input type="text" id="p_item" placeholder="例如：百香果" />
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>數量</label>
+        <input type="number" id="p_qty" inputmode="decimal" />
+      </div>
+      <div class="field">
+        <label>單位</label>
+        <input type="text" id="p_unit" placeholder="斤/箱/盒" />
+      </div>
+      <div class="field">
+        <label>單價</label>
+        <input type="number" id="p_price" inputmode="decimal" />
+      </div>
+    </div>
+    <div class="total-box">
+      <span>總金額</span>
+      <span class="amount" id="p_total">0</span>
+    </div>
+    <button class="submit-btn" id="p_submit" onclick="submitPurchase()">送出進貨</button>
+    <div class="msg" id="p_msg"></div>
+  </div>
+
+  <!-- 銷貨表單 -->
+  <div class="card hidden" id="formSale">
+    <div class="field">
+      <label>日期</label>
+      <input type="date" id="s_date" />
+    </div>
+    <div class="field">
+      <label>客戶（選填）</label>
+      <input type="text" id="s_customer" placeholder="例如：陳老闆" />
+    </div>
+    <div class="field">
+      <label>品名</label>
+      <input type="text" id="s_item" placeholder="例如：百香果" />
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>數量</label>
+        <input type="number" id="s_qty" inputmode="decimal" />
+      </div>
+      <div class="field">
+        <label>單位</label>
+        <input type="text" id="s_unit" placeholder="斤/箱/盒" />
+      </div>
+      <div class="field">
+        <label>單價</label>
+        <input type="number" id="s_price" inputmode="decimal" />
+      </div>
+    </div>
+    <div class="total-box">
+      <span>總金額</span>
+      <span class="amount" id="s_total">0</span>
+    </div>
+    <div class="field">
+      <label>收款方式</label>
+      <div class="pay-options">
+        <button type="button" class="pay-btn" data-pay="現金" onclick="selectPay(this)">現金</button>
+        <button type="button" class="pay-btn" data-pay="LINE PAY" onclick="selectPay(this)">LINE PAY</button>
+        <button type="button" class="pay-btn" data-pay="轉帳" onclick="selectPay(this)">轉帳</button>
+      </div>
+    </div>
+    <button class="submit-btn" id="s_submit" onclick="submitSale()">送出銷貨</button>
+    <div class="msg" id="s_msg"></div>
+  </div>
+
+  <div class="history">
+    <h3>本次連線已輸入</h3>
+    <div id="historyList"></div>
+  </div>
+</main>
+
+<script>
+function todayStr() {
+  const d = new Date();
+  const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d - tz).toISOString().slice(0, 10);
+}
+document.getElementById('p_date').value = todayStr();
+document.getElementById('s_date').value = todayStr();
+
+function switchTab(tab) {
+  document.getElementById('formPurchase').classList.toggle('hidden', tab !== 'purchase');
+  document.getElementById('formSale').classList.toggle('hidden', tab !== 'sale');
+  document.getElementById('tabPurchase').classList.toggle('active', tab === 'purchase');
+  document.getElementById('tabSale').classList.toggle('active', tab === 'sale');
+}
+
+function calcTotal(qtyId, priceId, totalId) {
+  const qty = parseFloat(document.getElementById(qtyId).value) || 0;
+  const price = parseFloat(document.getElementById(priceId).value) || 0;
+  document.getElementById(totalId).textContent = (qty * price).toLocaleString();
+}
+['p_qty', 'p_price'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('p_qty', 'p_price', 'p_total')));
+['s_qty', 's_price'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('s_qty', 's_price', 's_total')));
+
+let selectedPay = '';
+function selectPay(btn) {
+  document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedPay = btn.dataset.pay;
+}
+
+function addHistory(text, sub) {
+  const list = document.getElementById('historyList');
+  const item = document.createElement('div');
+  item.className = 'history-item';
+  item.innerHTML = '<div><div>' + text + '</div><div class="label">' + sub + '</div></div>';
+  list.prepend(item);
+}
+
+async function submitPurchase() {
+  const btn = document.getElementById('p_submit');
+  const msg = document.getElementById('p_msg');
+  const data = {
+    date: document.getElementById('p_date').value,
+    supplier: document.getElementById('p_supplier').value.trim(),
+    item: document.getElementById('p_item').value.trim(),
+    qty: document.getElementById('p_qty').value,
+    unit: document.getElementById('p_unit').value.trim(),
+    price: document.getElementById('p_price').value,
+  };
+  if (!data.supplier || !data.item || !data.qty || !data.price) {
+    msg.textContent = '請把供應商/品名/數量/單價填完整';
+    msg.className = 'msg err';
+    return;
+  }
+  btn.disabled = true;
+  msg.textContent = '送出中...';
+  msg.className = 'msg';
+  try {
+    const res = await fetch('/api/purchase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || '送出失敗');
+    msg.textContent = '已送出，總金額 ' + result.total;
+    msg.className = 'msg ok';
+    addHistory('進貨・' + data.item + ' x' + data.qty, data.supplier + '｜$' + result.total);
+    document.getElementById('p_item').value = '';
+    document.getElementById('p_qty').value = '';
+    document.getElementById('p_price').value = '';
+    document.getElementById('p_total').textContent = '0';
+    document.getElementById('p_item').focus();
+  } catch (err) {
+    msg.textContent = '送出失敗：' + err.message;
+    msg.className = 'msg err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function submitSale() {
+  const btn = document.getElementById('s_submit');
+  const msg = document.getElementById('s_msg');
+  const data = {
+    date: document.getElementById('s_date').value,
+    customer: document.getElementById('s_customer').value.trim(),
+    item: document.getElementById('s_item').value.trim(),
+    qty: document.getElementById('s_qty').value,
+    unit: document.getElementById('s_unit').value.trim(),
+    price: document.getElementById('s_price').value,
+    payment: selectedPay,
+  };
+  if (!data.item || !data.qty || !data.price || !data.payment) {
+    msg.textContent = '請把品名/數量/單價/收款方式填完整';
+    msg.className = 'msg err';
+    return;
+  }
+  btn.disabled = true;
+  msg.textContent = '送出中...';
+  msg.className = 'msg';
+  try {
+    const res = await fetch('/api/sale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || '送出失敗');
+    msg.textContent = '已送出，總金額 ' + result.total;
+    msg.className = 'msg ok';
+    addHistory('銷貨・' + data.item + ' x' + data.qty, (data.customer || '未填客戶') + '｜' + data.payment + '｜$' + result.total);
+    document.getElementById('s_item').value = '';
+    document.getElementById('s_qty').value = '';
+    document.getElementById('s_price').value = '';
+    document.getElementById('s_total').textContent = '0';
+    document.getElementById('s_item').focus();
+  } catch (err) {
+    msg.textContent = '送出失敗：' + err.message;
+    msg.className = 'msg err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>
