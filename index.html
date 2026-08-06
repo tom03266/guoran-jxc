@@ -199,7 +199,7 @@
 <div id="gate">
   <div class="box">
     <h2>請輸入密碼</h2>
-    <form id="gate_form">
+    <form id="gate_form" onsubmit="return false;">
       <input type="text" id="gate_pw" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="密碼" />
       <button type="submit">進入</button>
     </form>
@@ -304,6 +304,15 @@
 </div>
 
 <script>
+window.addEventListener('error', function (e) {
+  var m = document.getElementById('gate_msg');
+  if (m) m.textContent = 'JS錯誤：' + e.message;
+});
+window.addEventListener('unhandledrejection', function (e) {
+  var m = document.getElementById('gate_msg');
+  if (m) m.textContent = '錯誤：' + (e.reason && e.reason.message ? e.reason.message : e.reason);
+});
+
 const PW_KEY = 'jxc_pw';
 
 function showApp() {
