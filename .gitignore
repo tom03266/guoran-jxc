@@ -3,3 +3,4 @@
 *.json.key
 node_modules/
 .vercel
+_vercel_env_values.txt
