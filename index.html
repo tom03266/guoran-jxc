@@ -300,8 +300,8 @@ async function submitPurchase() {
     unit: document.getElementById('p_unit').value.trim(),
     price: document.getElementById('p_price').value,
   };
-  if (!data.supplier || !data.item || !data.qty || !data.price) {
-    msg.textContent = '請把供應商/品名/數量/單價填完整';
+  if (!data.item) {
+    msg.textContent = '請至少填品名';
     msg.className = 'msg err';
     return;
   }
@@ -318,7 +318,7 @@ async function submitPurchase() {
     if (!res.ok) throw new Error(result.error || '送出失敗');
     msg.textContent = '已送出，總金額 ' + result.total;
     msg.className = 'msg ok';
-    addHistory('進貨・' + data.item + ' x' + data.qty, data.supplier + '｜$' + result.total);
+    addHistory('進貨・' + data.item + (data.qty ? ' x' + data.qty : ''), (data.supplier || '未填供應商') + '｜$' + result.total);
     document.getElementById('p_item').value = '';
     document.getElementById('p_qty').value = '';
     document.getElementById('p_price').value = '';
@@ -344,8 +344,8 @@ async function submitSale() {
     price: document.getElementById('s_price').value,
     payment: selectedPay,
   };
-  if (!data.item || !data.qty || !data.price || !data.payment) {
-    msg.textContent = '請把品名/數量/單價/收款方式填完整';
+  if (!data.item) {
+    msg.textContent = '請至少填品名';
     msg.className = 'msg err';
     return;
   }
@@ -362,7 +362,7 @@ async function submitSale() {
     if (!res.ok) throw new Error(result.error || '送出失敗');
     msg.textContent = '已送出，總金額 ' + result.total;
     msg.className = 'msg ok';
-    addHistory('銷貨・' + data.item + ' x' + data.qty, (data.customer || '未填客戶') + '｜' + data.payment + '｜$' + result.total);
+    addHistory('銷貨・' + data.item + (data.qty ? ' x' + data.qty : ''), (data.customer || '未填客戶') + '｜' + (data.payment || '未填收款方式') + '｜$' + result.total);
     document.getElementById('s_item').value = '';
     document.getElementById('s_qty').value = '';
     document.getElementById('s_price').value = '';
