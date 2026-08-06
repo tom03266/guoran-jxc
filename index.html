@@ -200,7 +200,7 @@
 <div id="gate">
   <div class="box">
     <h2>請輸入密碼</h2>
-    <input type="tel" id="gate_pw" inputmode="numeric" autocomplete="off" placeholder="密碼" />
+    <input type="text" id="gate_pw" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="密碼" />
     <button onclick="checkGate()">進入</button>
     <div class="gate-msg" id="gate_msg"></div>
   </div>
