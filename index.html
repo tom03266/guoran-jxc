@@ -187,6 +187,21 @@
   .tag { font-size: 11px; padding: 2px 6px; border-radius: 6px; margin-right: 6px; color: white; font-weight: 600; }
   .tag.purchase { background: #b45309; }
   .tag.sale { background: var(--green); }
+  .voice-box { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border); }
+  .voice-box textarea {
+    width: 100%;
+    padding: 12px;
+    font-size: 17px;
+    font-family: inherit;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    resize: vertical;
+  }
+  .voice-btns { display: flex; gap: 8px; margin-top: 10px; }
+  .voice-btns .go { background: var(--green); color: white; border-color: var(--green); }
+  .vmsg { white-space: pre-line; text-align: left; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; }
   #gate {
     min-height: 100vh;
     background: var(--bg);
@@ -286,6 +301,17 @@
     </div>
     <button class="submit-btn" id="p_submit" onclick="submitPurchase()">送出進貨</button>
     <div class="msg" id="p_msg"></div>
+
+    <div class="voice-box">
+      <label>語音輸入（說完按「填入表單」）</label>
+      <textarea id="v_text" rows="3" placeholder="例如：我在大昌買卡蜜拉1斤85元我買一箱20斤7顆"></textarea>
+      <div class="voice-btns">
+        <button type="button" id="v_mic" class="opt-btn" onclick="toggleVoice()">🎤 說話</button>
+        <button type="button" class="opt-btn go" onclick="applyVoice()">填入表單</button>
+      </div>
+      <div class="msg vmsg" id="v_msg"></div>
+      <div class="hint">也可以直接按手機鍵盤上的 🎤 麥克風說話。填入後請確認上面的欄位，再按「送出進貨」。</div>
+    </div>
   </div>
 
   <!-- 銷貨表單 -->
@@ -553,6 +579,169 @@ function calcTotal(qtyId, priceId, totalId) {
 ['p_qty', 'p_price'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('p_qty', 'p_price', 'p_total')));
 ['s_qty', 's_price'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('s_qty', 's_price', 's_total')));
 
+// ===== 語音輸入：把一句話拆成供應商/品名/數量/單位/單價 =====
+const V_UNITS = ['公斤','台斤','公克','斤','克','箱','盒','顆','粒','個','包','袋','籃','件','盤','串','把','條','桶','支','片','罐','瓶','份','組'];
+const V_U = V_UNITS.join('|');
+const V_CN = '零〇一二兩两三四五六七八九十百千';
+const V_NUM_RE = new RegExp('((?:[' + V_CN + ']+(?:點[零〇一二三四五六七八九]+)?)|半)(?=(?:' + V_U + '|元|塊|圓))', 'g');
+const V_DIGIT = { 零: 0, 〇: 0, 一: 1, 二: 2, 兩: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+const r2 = (n) => Math.round(n * 100) / 100;
+
+function cnInt(s) {
+  if (!s) return 0;
+  if (/^[零〇一二兩两三四五六七八九]+$/.test(s)) return Number([...s].map(c => V_DIGIT[c]).join(''));
+  const mul = { 十: 10, 百: 100, 千: 1000 };
+  let total = 0, cur = 0;
+  for (const ch of s) {
+    if (ch in V_DIGIT) cur = V_DIGIT[ch];
+    else if (ch in mul) { total += (cur || 1) * mul[ch]; cur = 0; }
+  }
+  const tail = s.match(/([百千])([一二兩两三四五六七八九])$/);
+  total += tail ? cur * (mul[tail[1]] / 10) : cur; // 一百二 = 120、一千五 = 1500
+  return total;
+}
+
+function cnToNum(s) {
+  if (s === '半') return 0.5;
+  const parts = s.split('點');
+  const intPart = parts[0] ? cnInt(parts[0]) : 0;
+  if (parts[1] === undefined) return intPart;
+  return parseFloat(intPart + '.' + [...parts[1]].map(c => V_DIGIT[c]).join(''));
+}
+
+function parseVoice(raw) {
+  const warnings = [];
+  // 1. 統一格式：全形數字、千分位、中文數字(只轉「後面接單位/元」的，避免把「一點利」之類店名弄壞)
+  let t = String(raw || '')
+    .replace(/\s+/g, ' ')
+    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/(\d)[,，](\d{3})/g, '$1$2')
+    .replace(V_NUM_RE, m => String(cnToNum(m)))
+    .replace(new RegExp('(\\d+(?:\\.\\d+)?)(' + V_U + ')半', 'g'), (m, n, u) => (parseFloat(n) + 0.5) + u);
+
+  // 2. 單價：「1斤85元」「一箱1200元」「每箱800元」「85元」
+  const reA = new RegExp('(\\d+(?:\\.\\d+)?)\\s*(' + V_U + ')\\s*(?:賣|是|算|要|共)?\\s*(\\d+(?:\\.\\d+)?)\\s*(?:元|塊|圓)');
+  const reB = new RegExp('每\\s*(' + V_U + ')\\s*(?:賣|是|算)?\\s*(\\d+(?:\\.\\d+)?)\\s*(?:元|塊|圓)?');
+  const reC = /(\d+(?:\.\d+)?)\s*(?:元|塊|圓)/;
+  let n = 0, pu = '', p = null, m;
+  if ((m = t.match(reA))) { n = parseFloat(m[1]); pu = m[2]; p = parseFloat(m[3]); }
+  else if ((m = t.match(reB))) { n = 1; pu = m[1]; p = parseFloat(m[2]); }
+  else if ((m = t.match(reC))) { p = parseFloat(m[1]); }
+  if (m) t = t.replace(m[0], ' ');
+
+  // 3. 其餘的「數字+單位」都是數量候選
+  const tokens = [...t.matchAll(new RegExp('(\\d+(?:\\.\\d+)?)\\s*(' + V_U + ')', 'g'))]
+    .map(k => ({ n: parseFloat(k[1]), unit: k[2], text: k[0].replace(/\s+/g, '') }));
+
+  let qty = '', unit = '', price = '', used = null;
+  if (p !== null && pu) {
+    price = r2(p / n);
+    const same = tokens.find(k => k.unit === pu);
+    if (same) { used = same; qty = same.n; unit = pu; }
+    else if (n !== 1 || !tokens.length) { qty = n; unit = pu; }
+    else {
+      used = tokens[0]; qty = used.n; unit = used.unit;
+      warnings.push('單價是每' + pu + '，但數量單位是' + used.unit + '，請確認金額');
+    }
+  } else {
+    if (p !== null) price = p;
+    if (tokens.length) { used = tokens[0]; qty = used.n; unit = used.unit; }
+  }
+  const extras = tokens.filter(k => k !== used).map(k => k.text);
+
+  // 4. 供應商與品名：「(在|跟|向|從)○○買△△」
+  let supplier = '', item = '';
+  let vi = t.indexOf('買');
+  if (vi < 0) vi = t.search(/[進拿批訂]/);
+  if (vi >= 0) {
+    const head = t.slice(0, vi);
+    const sm = head.match(/.*[在跟向從去]([^在跟向從去]+)$/);
+    supplier = (sm ? sm[1] : head.replace(/^(?:我|今天|剛剛|剛才|早上|下午|現在)+/, ''))
+      .replace(/[，,。\s]+/g, '').replace(/的$/, '');
+    if (supplier.length > 10) supplier = '';
+    let rest = t.slice(vi + 1).trim().replace(/^(?:了|一些)/, '');
+    rest = rest.replace(new RegExp('^\\s*\\d+(?:\\.\\d+)?\\s*(?:' + V_U + ')\\s*(?:的)?'), ''); // 「買1箱卡蜜拉」
+    const im = rest.match(/^[^\d，,。;；!！?？\s我]+/);
+    item = im ? im[0].replace(/的$/, '') : '';
+  }
+
+  if (!item) warnings.push('沒聽出品名');
+  if (qty === '') warnings.push('沒聽出數量');
+  if (price === '') warnings.push('沒聽出單價（說的時候要帶「元」，例如 85元）');
+  return { supplier, item, qty, unit, price, extras, warnings };
+}
+
+function setVMsg(text, isErr) {
+  const m = document.getElementById('v_msg');
+  m.textContent = text;
+  m.className = 'msg vmsg' + (text ? (isErr ? ' err' : ' ok') : '');
+}
+
+function applyVoice() {
+  const text = document.getElementById('v_text').value.trim();
+  if (!text) { setVMsg('請先說話，或在上面的框框輸入內容', true); return; }
+  const r = parseVoice(text);
+  if (!r.item && r.qty === '' && r.price === '' && !r.supplier) {
+    setVMsg('聽不出內容，請再說一次，例如：我在大昌買卡蜜拉1斤85元', true);
+    return;
+  }
+  if (r.supplier) document.getElementById('p_supplier').value = r.supplier; // 沒聽到就保留原本的
+  document.getElementById('p_item').value = r.item;
+  document.getElementById('p_qty').value = r.qty;
+  if (r.unit) document.getElementById('p_unit').value = r.unit;
+  document.getElementById('p_price').value = r.price;
+  calcTotal('p_qty', 'p_price', 'p_total');
+
+  const filled = [
+    r.supplier && '供應商 ' + r.supplier,
+    r.item && '品名 ' + r.item,
+    r.qty !== '' && '數量 ' + r.qty + (r.unit || ''),
+    r.price !== '' && '單價 ' + r.price,
+  ].filter(Boolean).join('、');
+  const lines = ['已填入：' + filled];
+  if (r.qty !== '' && r.price !== '') lines.push('總金額 ' + r2(r.qty * r.price).toLocaleString());
+  if (r.extras.length) lines.push('另外聽到「' + r.extras.join('、') + '」，沒有填入，需要請自行修改');
+  r.warnings.forEach(w => lines.push('⚠ ' + w));
+  setVMsg(lines.join('\n'), r.warnings.length > 0);
+  document.getElementById('formPurchase').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false;
+function toggleVoice() {
+  const btn = document.getElementById('v_mic');
+  const box = document.getElementById('v_text');
+  if (listening && rec) { rec.stop(); return; }
+  try {
+    rec = new SR();
+    rec.lang = 'zh-TW';
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.onresult = (e) => {
+      let s = '';
+      for (let i = 0; i < e.results.length; i++) s += e.results[i][0].transcript;
+      box.value = s;
+    };
+    rec.onerror = (e) => {
+      setVMsg('語音辨識沒辦法用（' + e.error + '），請改按手機鍵盤上的 🎤 麥克風說話', true);
+    };
+    rec.onend = () => {
+      listening = false;
+      btn.textContent = '🎤 說話';
+      if (box.value.trim() && !document.getElementById('v_msg').classList.contains('err')) applyVoice();
+    };
+    setVMsg('', false);
+    listening = true;
+    btn.textContent = '⏹ 說完了';
+    rec.start();
+  } catch (err) {
+    listening = false;
+    btn.textContent = '🎤 說話';
+    setVMsg('語音辨識沒辦法用，請改按手機鍵盤上的 🎤 麥克風說話', true);
+  }
+}
+if (!SR) document.getElementById('v_mic').classList.add('hidden');
+
 let selectedPay = '';
 function selectPay(btn) {
   document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('selected'));
@@ -607,6 +796,8 @@ async function submitPurchase() {
     document.getElementById('p_qty').value = '';
     document.getElementById('p_price').value = '';
     document.getElementById('p_total').textContent = '0';
+    document.getElementById('v_text').value = '';
+    setVMsg('', false);
     document.getElementById('p_item').focus();
   } catch (err) {
     msg.textContent = '送出失敗：' + err.message;
