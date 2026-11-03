@@ -86,7 +86,7 @@
   .row2 { display: flex; gap: 10px; }
   .row2 .field { flex: 1; }
   .pay-options { display: flex; gap: 8px; }
-  .pay-btn {
+  .pay-btn, .opt-btn {
     flex: 1;
     padding: 12px 0;
     font-size: 15px;
@@ -96,7 +96,7 @@
     background: white;
     color: var(--text);
   }
-  .pay-btn.selected {
+  .pay-btn.selected, .opt-btn.selected {
     border-color: var(--green);
     background: #e8f5e9;
     color: var(--green-dark);
@@ -152,6 +152,41 @@
   }
   .history-item .label { color: var(--muted); font-size: 12px; }
   .hidden { display: none !important; }
+  .range-btns { display: flex; gap: 8px; margin-bottom: 14px; }
+  .range-btns button {
+    flex: 1;
+    padding: 9px 0;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: white;
+    color: var(--text);
+  }
+  .summary { display: flex; gap: 8px; margin-bottom: 12px; }
+  .summary > div {
+    flex: 1;
+    background: var(--card);
+    border-radius: 10px;
+    padding: 10px 6px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .summary b { display: block; font-size: 17px; color: var(--text); margin-top: 4px; }
+  .q-item {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .q-item .top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+  .q-item .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .tag { font-size: 11px; padding: 2px 6px; border-radius: 6px; margin-right: 6px; color: white; font-weight: 600; }
+  .tag.purchase { background: #b45309; }
+  .tag.sale { background: var(--green); }
   #gate {
     min-height: 100vh;
     background: var(--bg);
@@ -213,6 +248,7 @@
 <div class="tabs">
   <button class="tab-btn active" id="tabPurchase" onclick="switchTab('purchase')">進貨登打</button>
   <button class="tab-btn" id="tabSale" onclick="switchTab('sale')">銷貨登打</button>
+  <button class="tab-btn" id="tabQuery" onclick="switchTab('query')">查詢</button>
 </div>
 
 <main>
@@ -296,7 +332,44 @@
     <div class="msg" id="s_msg"></div>
   </div>
 
-  <div class="history">
+  <!-- 查詢 -->
+  <div class="hidden" id="formQuery">
+    <div class="card">
+      <div class="field">
+        <label>類型</label>
+        <div class="pay-options" id="qTypeOpts">
+          <button type="button" class="opt-btn selected" data-type="all" onclick="selectQType(this)">全部</button>
+          <button type="button" class="opt-btn" data-type="purchase" onclick="selectQType(this)">進貨</button>
+          <button type="button" class="opt-btn" data-type="sale" onclick="selectQType(this)">銷貨</button>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>起</label>
+          <input type="date" id="q_from" />
+        </div>
+        <div class="field">
+          <label>迄</label>
+          <input type="date" id="q_to" />
+        </div>
+      </div>
+      <div class="range-btns">
+        <button type="button" onclick="setQRange('today')">今天</button>
+        <button type="button" onclick="setQRange('month')">本月</button>
+        <button type="button" onclick="setQRange('all')">全部日期</button>
+      </div>
+      <div class="field">
+        <label>關鍵字（品名／供應商／客戶／收款方式）</label>
+        <input type="text" id="q_kw" placeholder="例如：百香果" />
+      </div>
+      <button class="submit-btn" id="q_submit" onclick="runQuery()">查詢</button>
+      <div class="msg" id="q_msg"></div>
+    </div>
+    <div class="summary hidden" id="q_summary"></div>
+    <div id="q_results"></div>
+  </div>
+
+  <div class="history" id="historyBox">
     <h3>本次連線已輸入</h3>
     <div id="historyList"></div>
   </div>
@@ -372,8 +445,104 @@ document.getElementById('s_date').value = todayStr();
 function switchTab(tab) {
   document.getElementById('formPurchase').classList.toggle('hidden', tab !== 'purchase');
   document.getElementById('formSale').classList.toggle('hidden', tab !== 'sale');
+  document.getElementById('formQuery').classList.toggle('hidden', tab !== 'query');
+  document.getElementById('historyBox').classList.toggle('hidden', tab === 'query');
   document.getElementById('tabPurchase').classList.toggle('active', tab === 'purchase');
   document.getElementById('tabSale').classList.toggle('active', tab === 'sale');
+  document.getElementById('tabQuery').classList.toggle('active', tab === 'query');
+  if (tab === 'query') runQuery();
+}
+
+let qType = 'all';
+function selectQType(btn) {
+  document.querySelectorAll('#qTypeOpts .opt-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  qType = btn.dataset.type;
+}
+
+function setQRange(kind) {
+  const t = todayStr();
+  document.getElementById('q_from').value = kind === 'today' ? t : kind === 'month' ? t.slice(0, 8) + '01' : '';
+  document.getElementById('q_to').value = kind === 'all' ? '' : t;
+  runQuery();
+}
+document.getElementById('q_from').value = todayStr().slice(0, 8) + '01';
+document.getElementById('q_to').value = todayStr();
+document.getElementById('q_kw').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') runQuery();
+});
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+function renderQuery(result) {
+  const summary = document.getElementById('q_summary');
+  summary.textContent = '';
+  const box = (label, value) => {
+    const d = el('div', '', label);
+    d.appendChild(el('b', '', value));
+    summary.appendChild(d);
+  };
+  box('筆數', result.count.toLocaleString());
+  if (qType !== 'sale') box('進貨合計', '$' + result.totalPurchase.toLocaleString());
+  if (qType !== 'purchase') box('銷貨合計', '$' + result.totalSale.toLocaleString());
+  summary.classList.remove('hidden');
+
+  const list = document.getElementById('q_results');
+  list.textContent = '';
+  result.rows.forEach(r => {
+    const item = el('div', 'q-item');
+    const top = el('div', 'top');
+    const left = el('div');
+    left.appendChild(el('span', 'tag ' + r.type, r.type === 'purchase' ? '進貨' : '銷貨'));
+    left.appendChild(document.createTextNode(r.item + (r.qty ? ' x' + r.qty + (r.unit || '') : '')));
+    top.appendChild(left);
+    top.appendChild(el('div', '', '$' + r.total.toLocaleString()));
+    item.appendChild(top);
+    const parts = [r.date || '無日期', r.party || (r.type === 'purchase' ? '未填供應商' : '未填客戶')];
+    if (r.type === 'sale') parts.push(r.payment || '未填收款方式');
+    if (r.price) parts.push('單價 ' + r.price);
+    item.appendChild(el('div', 'sub', parts.join('｜')));
+    list.appendChild(item);
+  });
+}
+
+async function runQuery() {
+  const btn = document.getElementById('q_submit');
+  const msg = document.getElementById('q_msg');
+  btn.disabled = true;
+  msg.textContent = '查詢中...';
+  msg.className = 'msg';
+  try {
+    const res = await fetch('/api/query', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        type: qType,
+        from: document.getElementById('q_from').value,
+        to: document.getElementById('q_to').value,
+        keyword: document.getElementById('q_kw').value,
+      }),
+    });
+    if (res.status === 401) {
+      localStorage.removeItem(PW_KEY);
+      location.reload();
+      return;
+    }
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || '查詢失敗');
+    renderQuery(result);
+    msg.textContent = result.count === 0 ? '沒有符合的資料' : result.truncated ? '只顯示最新 500 筆（合計是全部符合資料的總和）' : '';
+  } catch (err) {
+    msg.textContent = '查詢失敗：' + err.message;
+    msg.className = 'msg err';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function calcTotal(qtyId, priceId, totalId) {
