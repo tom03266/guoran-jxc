@@ -198,6 +198,15 @@
     color: var(--text);
   }
   .chip.on { border-color: var(--green); background: #e8f5e9; color: var(--green-dark); font-weight: 600; }
+  .chip.del { border-color: var(--danger); background: #fdecea; color: var(--danger); }
+  .chip-edit {
+    padding: 6px 8px;
+    font-size: 13px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    text-decoration: underline;
+  }
   .voice-box { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border); }
   .voice-box textarea {
     width: 100%;
@@ -617,10 +626,34 @@ function saveMem() {
   try { localStorage.setItem(MEM_KEY, JSON.stringify(mem)); } catch (e) { /* 存不了也不影響使用 */ }
 }
 
-// 剛輸入的新名稱立刻加進清單（已經有的就不動）
+// 按「整理」刪掉的名稱（只是不再出現在選單，不會動試算表裡的資料）。記在這支手機上
+const HIDE_KEY = 'jxc_hidden';
+let hiddenNames = { suppliers: [], items: [] };
+try {
+  const h = JSON.parse(localStorage.getItem(HIDE_KEY));
+  if (h && Array.isArray(h.suppliers) && Array.isArray(h.items)) hiddenNames = h;
+} catch (e) { /* 讀不到就當作沒有刪過 */ }
+let editChips = false;
+
+function saveHidden() {
+  try { localStorage.setItem(HIDE_KEY, JSON.stringify(hiddenNames)); } catch (e) { /* 存不了也不影響使用 */ }
+}
+
+function hideName(kind, name) {
+  if (!hiddenNames[kind].includes(name)) hiddenNames[kind].push(name);
+  saveHidden();
+  renderAllChips();
+}
+
+// 剛輸入的新名稱立刻加進清單（已經有的就不動）；之前刪掉的名稱再用到，就會回到選單
 function remember(kind, name) {
   name = String(name || '').trim();
-  if (!name || mem[kind].includes(name)) return;
+  if (!name) return;
+  if (hiddenNames[kind].includes(name)) {
+    hiddenNames[kind] = hiddenNames[kind].filter(n => n !== name);
+    saveHidden();
+  }
+  if (mem[kind].includes(name)) return;
   mem[kind].unshift(name);
   saveMem();
 }
@@ -638,26 +671,38 @@ async function loadOptions() {
   } catch (e) { /* 沒網路就繼續用手機上記住的 */ }
 }
 
-function renderChips(boxId, inputId, list) {
+function renderChips(boxId, inputId, kind) {
   const box = document.getElementById(boxId);
   const input = document.getElementById(inputId);
   const cur = input.value.trim().toLowerCase();
+  const list = mem[kind].filter(n => !hiddenNames[kind].includes(n));
   const shown = (cur ? list.filter(n => n.toLowerCase().includes(cur)) : list).slice(0, 8);
   box.textContent = '';
   shown.forEach(name => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'chip' + (name.toLowerCase() === cur ? ' on' : '');
-    b.textContent = name;
-    b.onclick = () => { input.value = name; renderAllChips(); };
+    b.className = 'chip' + (editChips ? ' del' : name.toLowerCase() === cur ? ' on' : '');
+    b.textContent = editChips ? name + ' ×' : name;
+    b.onclick = () => {
+      if (editChips) hideName(kind, name);          // 整理中：點了就從選單拿掉
+      else { input.value = name; renderAllChips(); } // 平常：點了就填入
+    };
     box.appendChild(b);
   });
+  if (shown.length) {
+    const e = document.createElement('button');
+    e.type = 'button';
+    e.className = 'chip-edit';
+    e.textContent = editChips ? '完成' : '整理';
+    e.onclick = () => { editChips = !editChips; renderAllChips(); };
+    box.appendChild(e);
+  }
 }
 
 function renderAllChips() {
-  renderChips('p_supplier_chips', 'p_supplier', mem.suppliers);
-  renderChips('p_item_chips', 'p_item', mem.items);
-  renderChips('s_item_chips', 's_item', mem.items);
+  renderChips('p_supplier_chips', 'p_supplier', 'suppliers');
+  renderChips('p_item_chips', 'p_item', 'items');
+  renderChips('s_item_chips', 's_item', 'items');
 }
 ['p_supplier', 'p_item', 's_item'].forEach(id => document.getElementById(id).addEventListener('input', renderAllChips));
 
