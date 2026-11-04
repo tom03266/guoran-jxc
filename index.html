@@ -308,6 +308,10 @@
         <input type="number" id="p_price" inputmode="decimal" />
       </div>
     </div>
+    <div class="field">
+      <label>其他金額（非商品價格，例如運費；選填）</label>
+      <input type="number" id="p_extra" inputmode="decimal" placeholder="0" />
+    </div>
     <div class="total-box">
       <span>總金額</span>
       <span class="amount" id="p_total">0</span>
@@ -355,6 +359,10 @@
         <label>單價</label>
         <input type="number" id="s_price" inputmode="decimal" />
       </div>
+    </div>
+    <div class="field">
+      <label>其他金額（非商品價格，例如運費；選填）</label>
+      <input type="number" id="s_extra" inputmode="decimal" placeholder="0" />
     </div>
     <div class="total-box">
       <span>總金額</span>
@@ -548,6 +556,7 @@ function renderQuery(result) {
     const parts = [r.date || '無日期', r.party || (r.type === 'purchase' ? '未填供應商' : '未填客戶')];
     if (r.type === 'sale') parts.push(r.payment || '未填收款方式');
     if (r.price) parts.push('單價 ' + r.price);
+    if (r.extra) parts.push('含其他金額 ' + r.extra.toLocaleString());
     item.appendChild(el('div', 'sub', parts.join('｜')));
     list.appendChild(item);
   });
@@ -587,13 +596,14 @@ async function runQuery() {
   }
 }
 
-function calcTotal(qtyId, priceId, totalId) {
+function calcTotal(qtyId, priceId, totalId, extraId) {
   const qty = parseFloat(document.getElementById(qtyId).value) || 0;
   const price = parseFloat(document.getElementById(priceId).value) || 0;
-  document.getElementById(totalId).textContent = (qty * price).toLocaleString();
+  const extra = parseFloat(document.getElementById(extraId).value) || 0;
+  document.getElementById(totalId).textContent = (Math.round((qty * price + extra) * 100) / 100).toLocaleString();
 }
-['p_qty', 'p_price'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('p_qty', 'p_price', 'p_total')));
-['s_qty', 's_price'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('s_qty', 's_price', 's_total')));
+['p_qty', 'p_price', 'p_extra'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('p_qty', 'p_price', 'p_total', 'p_extra')));
+['s_qty', 's_price', 's_extra'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('s_qty', 's_price', 's_total', 's_extra')));
 
 // ===== 常用供應商/品名：點一下就填入 =====
 const MEM_KEY = 'jxc_mem';
@@ -844,7 +854,7 @@ function applyVoice() {
   document.getElementById('p_qty').value = r.qty;
   if (r.unit) document.getElementById('p_unit').value = r.unit;
   document.getElementById('p_price').value = r.price;
-  calcTotal('p_qty', 'p_price', 'p_total');
+  calcTotal('p_qty', 'p_price', 'p_total', 'p_extra');
   renderAllChips();
 
   const filled = [
@@ -854,7 +864,7 @@ function applyVoice() {
     r.price !== '' && '單價 ' + r.price,
   ].filter(Boolean).join('、');
   const lines = ['已填入：' + filled];
-  if (r.qty !== '' && r.price !== '') lines.push('總金額 ' + r2(r.qty * r.price).toLocaleString());
+  if (r.qty !== '' && r.price !== '') lines.push('總金額 ' + r2(r.qty * r.price + (parseFloat(document.getElementById('p_extra').value) || 0)).toLocaleString());
   if (r.extras.length) lines.push('另外聽到「' + r.extras.join('、') + '」，沒有填入，需要請自行修改');
   r.warnings.forEach(w => lines.push('⚠ ' + w));
   setVMsg(lines.join('\n'), r.warnings.length > 0);
@@ -922,6 +932,7 @@ async function submitPurchase() {
     qty: document.getElementById('p_qty').value,
     unit: document.getElementById('p_unit').value.trim(),
     price: document.getElementById('p_price').value,
+    extra: document.getElementById('p_extra').value,
   };
   if (!data.item) {
     msg.textContent = '請至少填品名';
@@ -950,6 +961,7 @@ async function submitPurchase() {
     document.getElementById('p_item').value = '';
     document.getElementById('p_qty').value = '';
     document.getElementById('p_price').value = '';
+    document.getElementById('p_extra').value = '';
     document.getElementById('p_total').textContent = '0';
     document.getElementById('v_text').value = '';
     setVMsg('', false);
@@ -975,6 +987,7 @@ async function submitSale() {
     qty: document.getElementById('s_qty').value,
     unit: document.getElementById('s_unit').value.trim(),
     price: document.getElementById('s_price').value,
+    extra: document.getElementById('s_extra').value,
     payment: selectedPay,
   };
   if (!data.item) {
@@ -1004,6 +1017,7 @@ async function submitSale() {
     document.getElementById('s_item').value = '';
     document.getElementById('s_qty').value = '';
     document.getElementById('s_price').value = '';
+    document.getElementById('s_extra').value = '';
     document.getElementById('s_total').textContent = '0';
     remember('items', data.item);
     renderAllChips();

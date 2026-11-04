@@ -26,6 +26,7 @@ function loadType(rows, type) {
     price: r[5] || '',
     total: toNum(r[6]),
     payment: type === 'sale' ? r[7] || '' : '',
+    extra: toNum(type === 'sale' ? r[8] : r[7]), // 其他金額欄：進貨在 H、銷貨在 I（銷貨的 H 是收款方式）
   })).filter(r => r.item || r.party || r.total);
 }
 
