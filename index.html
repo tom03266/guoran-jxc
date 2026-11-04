@@ -187,6 +187,17 @@
   .tag { font-size: 11px; padding: 2px 6px; border-radius: 6px; margin-right: 6px; color: white; font-weight: 600; }
   .tag.purchase { background: #b45309; }
   .tag.sale { background: var(--green); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chips:empty { display: none; }
+  .chip {
+    padding: 6px 12px;
+    font-size: 14px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: white;
+    color: var(--text);
+  }
+  .chip.on { border-color: var(--green); background: #e8f5e9; color: var(--green-dark); font-weight: 600; }
   .voice-box { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border); }
   .voice-box textarea {
     width: 100%;
@@ -276,10 +287,12 @@
     <div class="field">
       <label>供應商</label>
       <input type="text" id="p_supplier" placeholder="例如：名昇" />
+      <div class="chips" id="p_supplier_chips"></div>
     </div>
     <div class="field">
       <label>品名</label>
       <input type="text" id="p_item" placeholder="例如：百香果" />
+      <div class="chips" id="p_item_chips"></div>
     </div>
     <div class="row2">
       <div class="field">
@@ -327,6 +340,7 @@
     <div class="field">
       <label>品名</label>
       <input type="text" id="s_item" placeholder="例如：百香果" />
+      <div class="chips" id="s_item_chips"></div>
     </div>
     <div class="row2">
       <div class="field">
@@ -417,6 +431,8 @@ const PW_KEY = 'jxc_pw';
 function showApp() {
   document.getElementById('gate').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
+  renderAllChips(); // 先用手機上記住的清單，馬上就有選項
+  loadOptions();    // 再從試算表更新（含之前輸入過的全部資料）
 }
 
 async function checkGate() {
@@ -578,6 +594,62 @@ function calcTotal(qtyId, priceId, totalId) {
 }
 ['p_qty', 'p_price'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('p_qty', 'p_price', 'p_total')));
 ['s_qty', 's_price'].forEach(id => document.getElementById(id).addEventListener('input', () => calcTotal('s_qty', 's_price', 's_total')));
+
+// ===== 常用供應商/品名：點一下就填入 =====
+const MEM_KEY = 'jxc_mem';
+let mem = { suppliers: [], items: [] };
+try {
+  const saved = JSON.parse(localStorage.getItem(MEM_KEY));
+  if (saved && Array.isArray(saved.suppliers) && Array.isArray(saved.items)) mem = saved;
+} catch (e) { /* 讀不到就從空的開始 */ }
+
+function saveMem() {
+  try { localStorage.setItem(MEM_KEY, JSON.stringify(mem)); } catch (e) { /* 存不了也不影響使用 */ }
+}
+
+// 剛輸入的新名稱立刻加進清單（已經有的就不動）
+function remember(kind, name) {
+  name = String(name || '').trim();
+  if (!name || mem[kind].includes(name)) return;
+  mem[kind].unshift(name);
+  saveMem();
+}
+
+async function loadOptions() {
+  try {
+    const res = await fetch('/api/options', { method: 'POST', headers: authHeaders(), body: '{}' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data.suppliers) && Array.isArray(data.items)) {
+      mem = { suppliers: data.suppliers, items: data.items };
+      saveMem();
+      renderAllChips();
+    }
+  } catch (e) { /* 沒網路就繼續用手機上記住的 */ }
+}
+
+function renderChips(boxId, inputId, list) {
+  const box = document.getElementById(boxId);
+  const input = document.getElementById(inputId);
+  const cur = input.value.trim().toLowerCase();
+  const shown = (cur ? list.filter(n => n.toLowerCase().includes(cur)) : list).slice(0, 8);
+  box.textContent = '';
+  shown.forEach(name => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip' + (name.toLowerCase() === cur ? ' on' : '');
+    b.textContent = name;
+    b.onclick = () => { input.value = name; renderAllChips(); };
+    box.appendChild(b);
+  });
+}
+
+function renderAllChips() {
+  renderChips('p_supplier_chips', 'p_supplier', mem.suppliers);
+  renderChips('p_item_chips', 'p_item', mem.items);
+  renderChips('s_item_chips', 's_item', mem.items);
+}
+['p_supplier', 'p_item', 's_item'].forEach(id => document.getElementById(id).addEventListener('input', renderAllChips));
 
 // ===== 語音輸入：把一句話拆成供應商/品名/數量/單位/單價 =====
 const V_UNITS = ['公斤','台斤','公克','斤','克','箱','盒','顆','粒','個','包','袋','籃','件','盤','串','把','條','桶','支','片','罐','瓶','份','組'];
@@ -773,6 +845,7 @@ function applyVoice() {
   if (r.unit) document.getElementById('p_unit').value = r.unit;
   document.getElementById('p_price').value = r.price;
   calcTotal('p_qty', 'p_price', 'p_total');
+  renderAllChips();
 
   const filled = [
     r.supplier && '供應商 ' + r.supplier,
@@ -880,6 +953,9 @@ async function submitPurchase() {
     document.getElementById('p_total').textContent = '0';
     document.getElementById('v_text').value = '';
     setVMsg('', false);
+    remember('suppliers', data.supplier);
+    remember('items', data.item);
+    renderAllChips();
     document.getElementById('p_item').focus();
   } catch (err) {
     msg.textContent = '送出失敗：' + err.message;
@@ -929,6 +1005,8 @@ async function submitSale() {
     document.getElementById('s_qty').value = '';
     document.getElementById('s_price').value = '';
     document.getElementById('s_total').textContent = '0';
+    remember('items', data.item);
+    renderAllChips();
     document.getElementById('s_item').focus();
   } catch (err) {
     msg.textContent = '送出失敗：' + err.message;
